@@ -1,0 +1,26 @@
+version: 0.2
+
+env:
+  variables:
+    TF_IN_AUTOMATION: "true"
+
+phases:
+  install:
+    commands:
+      - echo Installing Terraform
+      - curl -sLo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+      - unzip -o /tmp/terraform.zip -d /usr/local/bin
+      - terraform -version
+  build:
+    commands:
+      - echo Entering terraform/environments/multi-env
+      - cd terraform/environments/multi-env
+      - terraform init -input=false -reconfigure
+      - terraform workspace select ${TF_ENV:-dev} || terraform workspace new ${TF_ENV:-dev}
+      - terraform plan -input=false -var-file=dev.tfvars -out=tfplan
+      - terraform apply -input=false -auto-approve tfplan
+artifacts:
+  files:
+    - '**/*'
+
+

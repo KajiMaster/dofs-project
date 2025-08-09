@@ -1,0 +1,84 @@
+# Modular BuildSpec for Non-Production Environments
+# Reusable pattern for Terraform CI/CD with CodePipeline
+# Environment variables from CodeBuild project:
+#   - TF_WORKSPACE: Target workspace (dev/staging)
+#   - TF_VAR_FILE: Variables file (dev.tfvars/staging.tfvars)
+#   - TF_IN_AUTOMATION: Set to 'true' for CI/CD mode
+
+version: 0.2
+
+env:
+  variables:
+    # Default Terraform directory - override in CodeBuild if different
+    TF_ROOT: "terraform/environments/multi-env"
+    # Enable colored output and automation mode
+    TF_CLI_CONFIG_FILE: "/tmp/.terraformrc"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - echo "Installing dependencies..."
+      - echo 'plugin_cache_dir = "/tmp/.terraform.d/plugin-cache"' > /tmp/.terraformrc
+      - mkdir -p /tmp/.terraform.d/plugin-cache
+      
+  pre_build:
+    commands:
+      - echo "=== Pre-Build Phase ==="
+      - echo "Build started on $(date)"
+      - echo "Target Environment -> $TF_WORKSPACE"
+      - echo "Variables File -> $TF_VAR_FILE" 
+      - echo "Terraform Root -> $TF_ROOT"
+      - echo "Validating required environment variables..."
+      - |
+        if [ -z "$TF_WORKSPACE" ] || [ -z "$TF_VAR_FILE" ]; then
+          echo "ERROR: TF_WORKSPACE and TF_VAR_FILE must be set"
+          exit 1
+        fi
+      - echo "Changing to Terraform directory..."
+      - cd $TF_ROOT
+      - echo "Current directory: $(pwd)"
+      - echo "Available files:"
+      - ls -la
+
+  build:
+    commands:
+      - echo "=== Build Phase ==="
+      - echo "Initializing Terraform..."
+      - terraform init -input=false
+      - echo "Selecting/creating workspace: $TF_WORKSPACE"
+      - terraform workspace select $TF_WORKSPACE 2>/dev/null || terraform workspace new $TF_WORKSPACE
+      - echo "Current workspace: $(terraform workspace show)"
+      - echo "Validating Terraform configuration..."
+      - terraform validate
+      - echo "Running terraform plan..."
+      - terraform plan -var-file="$TF_VAR_FILE" -input=false -out=tfplan
+      - echo "Applying terraform plan..."
+      - terraform apply -input=false -auto-approve tfplan
+      - echo "Getting outputs..."
+      - terraform output -json > terraform-outputs.json || echo "No outputs available"
+
+  post_build:
+    commands:
+      - echo "=== Post-Build Phase ==="
+      - echo "Build completed on $(date)"
+      - |
+        if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then
+          echo "✅ SUCCESS: Deployment to $TF_WORKSPACE completed successfully"
+        else
+          echo "❌ FAILED: Deployment to $TF_WORKSPACE failed"
+          exit 1
+        fi
+      - echo "Terraform state info:"
+      - terraform show -no-color | head -20 || echo "Unable to show state"
+
+artifacts:
+  files:
+    - "**/*"
+  base-directory: $TF_ROOT
+  name: "terraform-$TF_WORKSPACE-$(date +%Y%m%d-%H%M%S)"
+
+cache:
+  paths:
+    - '/tmp/.terraform.d/plugin-cache/**/*'
