@@ -244,6 +244,13 @@ resource "aws_iam_role_policy" "nonprod_codepipeline_policy" {
           aws_codebuild_project.nonprod_dev.arn,
           aws_codebuild_project.nonprod_staging.arn
         ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "codestar-connections:UseConnection"
+        ],
+        Resource = var.github_connection_arn != "" ? var.github_connection_arn : aws_codestarconnections_connection.github[0].arn
       }
     ]
   })
@@ -463,6 +470,13 @@ resource "aws_iam_role_policy" "prod_codepipeline_policy" {
           "codebuild:StartBuild"
         ],
         Resource = aws_codebuild_project.prod.arn
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "codestar-connections:UseConnection"
+        ],
+        Resource = var.github_connection_arn != "" ? var.github_connection_arn : aws_codestarconnections_connection.github[0].arn
       }
     ]
   })
