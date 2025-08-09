@@ -21,10 +21,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cicd_artifacts" {
   }
 }
 
-# Source repository
-resource "aws_codecommit_repository" "repo" {
-  repository_name = "${var.project_name}-infra"
-  description     = "Infrastructure as code for ${var.project_name}"
+# GitHub repository configuration  
+variable "github_repo" {
+  type        = string
+  description = "GitHub repository in format: owner/repo"
+}
+
+variable "github_token" {
+  type        = string
+  default     = ""
+  description = "GitHub personal access token (leave empty to use SSM parameter)"
+  sensitive   = true
+}
+
+# Retrieve GitHub token from AWS Systems Manager Parameter Store
+data "aws_ssm_parameter" "github_token" {
+  name            = "/github/personal-access-token"
+  with_decryption = true
 }
 
 # ================================
@@ -211,17 +224,6 @@ resource "aws_iam_role_policy" "nonprod_codepipeline_policy" {
       {
         Effect = "Allow",
         Action = [
-          "codecommit:GetBranch",
-          "codecommit:GetCommit",
-          "codecommit:UploadArchive",
-          "codecommit:GetUploadArchiveStatus",
-          "codecommit:CancelUploadArchive"
-        ],
-        Resource = aws_codecommit_repository.repo.arn
-      },
-      {
-        Effect = "Allow",
-        Action = [
           "codebuild:BatchGetBuilds",
           "codebuild:StartBuild"
         ],
@@ -250,12 +252,14 @@ resource "aws_codepipeline" "nonprod" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "CodeCommit"
+      provider         = "GitHub"
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        RepositoryName = aws_codecommit_repository.repo.repository_name
-        BranchName     = "develop"
+        Owner      = split("/", var.github_repo)[0]
+        Repo       = split("/", var.github_repo)[1]
+        Branch     = "develop"
+        OAuthToken = var.github_token != "" ? var.github_token : data.aws_ssm_parameter.github_token.value
       }
     }
   }
@@ -443,17 +447,6 @@ resource "aws_iam_role_policy" "prod_codepipeline_policy" {
       {
         Effect = "Allow",
         Action = [
-          "codecommit:GetBranch",
-          "codecommit:GetCommit",
-          "UploadArchive",
-          "codecommit:GetUploadArchiveStatus",
-          "codecommit:CancelUploadArchive"
-        ],
-        Resource = aws_codecommit_repository.repo.arn
-      },
-      {
-        Effect = "Allow",
-        Action = [
           "codebuild:BatchGetBuilds",
           "codebuild:StartBuild"
         ],
@@ -479,12 +472,14 @@ resource "aws_codepipeline" "prod" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "CodeCommit"
+      provider         = "GitHub"
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        RepositoryName = aws_codecommit_repository.repo.repository_name
-        BranchName     = "main"  # Production deploys from main
+        Owner      = split("/", var.github_repo)[0]
+        Repo       = split("/", var.github_repo)[1]
+        Branch     = "main"
+        OAuthToken = var.github_token != "" ? var.github_token : data.aws_ssm_parameter.github_token.value
       }
     }
   }
