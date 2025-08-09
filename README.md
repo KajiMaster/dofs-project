@@ -58,6 +58,7 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
 1. **Configure GitHub Personal Access Token**:
    ```bash
    aws ssm put-parameter \
+     --region us-east-1 \
      --name "/github/personal-access-token" \
      --value "ghp_your_github_token_here" \
      --type "SecureString" \

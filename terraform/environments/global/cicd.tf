@@ -27,6 +27,12 @@ variable "github_repo" {
   description = "GitHub repository in format: owner/repo"
 }
 
+variable "github_connection_arn" {
+  type        = string
+  default     = ""
+  description = "AWS CodeStar Connection ARN for GitHub (leave empty to use GitHub v1 with token)"
+}
+
 variable "github_token" {
   type        = string
   default     = ""
@@ -34,10 +40,17 @@ variable "github_token" {
   sensitive   = true
 }
 
-# Retrieve GitHub token from AWS Systems Manager Parameter Store
+# Retrieve GitHub token from AWS Systems Manager Parameter Store (for legacy support)
 data "aws_ssm_parameter" "github_token" {
   name            = "/github/personal-access-token"
   with_decryption = true
+}
+
+# CodeStar Connection for GitHub (recommended approach)
+resource "aws_codestarconnections_connection" "github" {
+  count         = var.github_connection_arn == "" ? 1 : 0
+  name          = "${var.project_name}-github-connection"
+  provider_type = "GitHub"
 }
 
 # ================================
@@ -101,7 +114,7 @@ resource "aws_iam_role_policy" "nonprod_codebuild_policy" {
         Action = [
           "codecommit:GitPull"
         ],
-        Resource = aws_codecommit_repository.repo.arn
+        Resource = "*"
       },
       # Broad permissions for Terraform to manage AWS resources in non-prod
       {
@@ -252,14 +265,13 @@ resource "aws_codepipeline" "nonprod" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "GitHub"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        Owner      = split("/", var.github_repo)[0]
-        Repo       = split("/", var.github_repo)[1]
-        Branch     = "develop"
-        OAuthToken = var.github_token != "" ? var.github_token : data.aws_ssm_parameter.github_token.value
+        ConnectionArn    = var.github_connection_arn != "" ? var.github_connection_arn : aws_codestarconnections_connection.github[0].arn
+        FullRepositoryId = var.github_repo
+        BranchName       = "develop"
       }
     }
   }
@@ -358,7 +370,7 @@ resource "aws_iam_role_policy" "prod_codebuild_policy" {
         Action = [
           "codecommit:GitPull"
         ],
-        Resource = aws_codecommit_repository.repo.arn
+        Resource = "*"
       },
       # Same broad permissions for prod (could be more restrictive)
       {
@@ -472,14 +484,13 @@ resource "aws_codepipeline" "prod" {
       name             = "Source"
       category         = "Source"
       owner            = "AWS"
-      provider         = "GitHub"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
       configuration = {
-        Owner      = split("/", var.github_repo)[0]
-        Repo       = split("/", var.github_repo)[1]
-        Branch     = "main"
-        OAuthToken = var.github_token != "" ? var.github_token : data.aws_ssm_parameter.github_token.value
+        ConnectionArn    = var.github_connection_arn != "" ? var.github_connection_arn : aws_codestarconnections_connection.github[0].arn
+        FullRepositoryId = var.github_repo
+        BranchName       = "main"
       }
     }
   }
