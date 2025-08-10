@@ -55,7 +55,20 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
 
 ### Step 2: AWS Configuration
 
-1. **Configure GitHub Personal Access Token**:
+1. **Create dedicated AWS profile for this project** (recommended to avoid conflicts):
+   ```bash
+   # Create dofs-project profile with us-east-1 region
+   aws configure set region us-east-1 --profile dofs-project
+   
+   # Copy credentials from your default profile (or set them directly)
+   aws configure set aws_access_key_id YOUR_ACCESS_KEY --profile dofs-project
+   aws configure set aws_secret_access_key YOUR_SECRET_KEY --profile dofs-project
+   
+   # Set environment variable to use this profile
+   export AWS_PROFILE=dofs-project
+   ```
+
+2. **Configure GitHub Personal Access Token**:
    ```bash
    aws ssm put-parameter \
      --region us-east-1 \
@@ -65,7 +78,7 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
      --description "GitHub PAT for CI/CD pipelines"
    ```
 
-2. **Deploy global infrastructure** (bootstrap + CI/CD):
+3. **Deploy global infrastructure** (bootstrap + CI/CD):
    ```bash
    cd terraform/environments/global
    terraform init
@@ -73,7 +86,7 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
    terraform apply
    ```
 
-3. **Deploy application infrastructure**:
+4. **Deploy application infrastructure**:
    ```bash
    cd ../multi-env
    terraform init
@@ -99,16 +112,27 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
 
 ## Usage
 
+### Getting the API URL
+
+After deployment, get your API Gateway URL:
+```bash
+export AWS_PROFILE=dofs-project
+cd terraform/environments/multi-env
+terraform output api_gateway_url
+```
+
 ### Testing the API
 
-Use the included test script:
+**Quick Test** - Use the included test script:
 ```bash
+export AWS_PROFILE=dofs-project  # Use your dofs-project profile
 ./test-api.sh
 ```
 
-Or manually test with curl:
+**Manual Testing** - Replace `YOUR_API_URL` with your actual API Gateway URL:
 ```bash
-curl -X POST https://your-api-gateway-url/dev/order \
+# Valid order (should succeed)
+curl -X POST YOUR_API_URL/order \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "cust-12345",
@@ -116,15 +140,112 @@ curl -X POST https://your-api-gateway-url/dev/order \
       {"product_id": "prod-widget-001", "quantity": 2}
     ]
   }'
+
+# Expected response:
+# {
+#   "message": "Order received and processing started",
+#   "order_id": "uuid-here",
+#   "status": "processing",
+#   "execution_arn": "arn:aws:states:..."
+# }
 ```
 
-### Monitoring
+### API Validation
 
-- **API Gateway**: CloudWatch metrics and logs
-- **Lambda Functions**: CloudWatch logs with structured JSON
-- **Step Functions**: Execution history and flow visualization
-- **DynamoDB**: Order status and failed order tracking
-- **CodePipeline**: Build history and deployment status
+The system has **two-tier validation**:
+
+1. **API Gateway Validation** (first layer):
+   - Validates JSON format and required fields
+   - Returns: `{"message": "Invalid request body"}` for format errors
+   
+2. **Lambda Validation** (business logic):  
+   - Validates business rules and environment configuration
+   - Returns specific error messages like: `{"error": "Step Function ARN not configured"}`
+
+**Common validation errors**:
+```bash
+# Missing required fields → API Gateway blocks
+curl -X POST YOUR_API_URL/order \
+  -d '{"items": [{"product_id": "test", "quantity": 1}]}'
+# Response: {"message": "Invalid request body"}
+
+# Empty items array → Lambda validates  
+curl -X POST YOUR_API_URL/order \
+  -d '{"customer_id": "test", "items": []}'
+# Response: {"error": "items must be a non-empty array"}
+
+# Invalid quantity → API Gateway blocks
+curl -X POST YOUR_API_URL/order \
+  -d '{"customer_id": "test", "items": [{"product_id": "test", "quantity": 0}]}'
+# Response: {"message": "Invalid request body"}
+```
+
+### Monitoring & Verification
+
+**Check Order Processing**:
+```bash
+export AWS_PROFILE=dofs-project
+
+# View order counts
+aws dynamodb scan --table-name dofs-dev-orders --select COUNT
+aws dynamodb scan --table-name dofs-dev-failed-orders --select COUNT
+
+# Check order status breakdown
+aws dynamodb scan --table-name dofs-dev-orders \
+  --projection-expression "#s" \
+  --expression-attribute-names '{"#s":"status"}' | \
+  jq '.Items[].status.S' | sort | uniq -c
+
+# View failed orders
+aws dynamodb scan --table-name dofs-dev-failed-orders | jq '.Items'
+```
+
+**Check SQS Queues**:
+```bash
+# Check message counts
+aws sqs get-queue-attributes \
+  --queue-url https://queue.amazonaws.com/YOUR-ACCOUNT/dofs-dev-order-queue \
+  --attribute-names ApproximateNumberOfMessages
+
+aws sqs get-queue-attributes \
+  --queue-url https://queue.amazonaws.com/YOUR-ACCOUNT/dofs-dev-order-dlq \
+  --attribute-names ApproximateNumberOfMessages
+```
+
+**CloudWatch Logs**:
+```bash
+# Lambda function logs
+aws logs describe-log-groups | jq '.logGroups[] | select(.logGroupName | contains("dofs"))'
+
+# Step Function execution logs  
+aws logs describe-log-groups | jq '.logGroups[] | select(.logGroupName | contains("stepfunctions"))'
+```
+
+**System Health Indicators**:
+- **Success Rate**: ~70% orders FULFILLED, ~30% FAILED (as designed by `fulfillment_success_rate = 0.7`)
+- **Queue Status**: Both main queue and DLQ should be empty (0 messages) when idle
+- **Failed Orders**: Failed orders appear in both `orders` table (status: FAILED) and `failed_orders` table
+- **Order States**: Orders progress through PROCESSING → FULFILLED/FAILED
+- **Error Handling**: Failed fulfillments trigger DLQ processing and failed order table updates
+
+### System Behavior
+
+**Order Processing Flow**:
+1. **API Gateway** receives POST to `/order` endpoint
+2. **API Handler Lambda** validates input and starts Step Function
+3. **Step Functions** orchestrates: Validation → Storage → SQS queuing  
+4. **SQS Queue** triggers Fulfillment Lambda
+5. **Fulfillment Lambda** simulates processing (70% success rate)
+6. **Success**: Updates order status to FULFILLED
+7. **Failure**: Moves order to failed_orders table, marks as FAILED
+
+**Validated Behaviors** (tested):
+- ✅ **API Validation**: Two-tier validation (API Gateway + Lambda)
+- ✅ **Order Processing**: Complete end-to-end flow
+- ✅ **Success/Failure Simulation**: ~70/30 split working correctly
+- ✅ **Error Handling**: Failed orders properly tracked and stored
+- ✅ **SQS Processing**: Messages processed without accumulation in DLQ
+- ✅ **Environment Isolation**: AWS profile prevents region conflicts
 
 ## Project Structure
 
@@ -243,15 +364,24 @@ fulfillment_success_rate = 0.9
 ### Development Commands
 
 ```bash
+# Set profile for all operations
+export AWS_PROFILE=dofs-project
+
 # Terraform operations
 terraform init
 terraform plan -var-file="dev.tfvars"
 terraform apply -var-file="dev.tfvars"
 terraform workspace list
+terraform output  # Get API Gateway URL and other outputs
 
-# Testing
+# Testing and monitoring
 ./test-api.sh
-aws logs tail /aws/lambda/dofs-dev-api-handler --follow
+aws dynamodb scan --table-name dofs-dev-orders --select COUNT
+aws dynamodb scan --table-name dofs-dev-failed-orders --select COUNT
+
+# CloudWatch logs (replace with actual log stream names)
+aws logs describe-log-streams --log-group-name /aws/lambda/dofs-dev-api-handler
+aws logs describe-log-streams --log-group-name /aws/lambda/dofs-dev-fulfill-order
 ```
 
 ## Contributing
@@ -268,4 +398,4 @@ This project is provided as-is for educational and demonstration purposes.
 
 ---
 
-**Built with AWS Serverless Architecture + Terraform + GitFlow CI/CD**# Test automatic pipeline trigger
+**Built with AWS Serverless Architecture + Terraform + GitFlow CI/CD**

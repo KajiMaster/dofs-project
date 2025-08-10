@@ -88,15 +88,7 @@ resource "aws_iam_role_policy" "nonprod_codebuild_policy" {
       {
         Effect = "Allow",
         Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:PutObject",
-          "s3:GetBucketVersioning",
-          "s3:PutBucketVersioning",
-          "s3:CreateBucket",
-          "s3:DeleteBucket",
-          "s3:GetBucketLocation",
-          "s3:ListBucket"
+          "s3:*"
         ],
         Resource = [
           aws_s3_bucket.cicd_artifacts.arn,
@@ -265,8 +257,9 @@ resource "aws_iam_role_policy" "nonprod_codepipeline_policy" {
 
 # Non-Prod Pipeline (DEV → STAGING)
 resource "aws_codepipeline" "nonprod" {
-  name     = "${var.project_name}-nonprod-pipeline"
-  role_arn = aws_iam_role.nonprod_codepipeline_role.arn
+  name          = "${var.project_name}-nonprod-pipeline"
+  role_arn      = aws_iam_role.nonprod_codepipeline_role.arn
+  pipeline_type = "V2"
 
   artifact_store {
     location = aws_s3_bucket.cicd_artifacts.bucket
@@ -318,6 +311,18 @@ resource "aws_codepipeline" "nonprod" {
       version          = "1"
       configuration = {
         ProjectName = aws_codebuild_project.nonprod_staging.name
+      }
+    }
+  }
+
+  trigger {
+    provider_type = "CodeStarSourceConnection"
+    git_configuration {
+      source_action_name = "Source"
+      push {
+        branches {
+          includes = ["develop"]
+        }
       }
     }
   }
