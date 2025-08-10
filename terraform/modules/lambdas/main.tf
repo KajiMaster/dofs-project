@@ -537,6 +537,15 @@ resource "aws_iam_role_policy" "dlq_handler_policy" {
           var.failed_orders_table_arn,
           "${var.failed_orders_table_arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = "*"
       }
     ]
   })
