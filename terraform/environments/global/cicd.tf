@@ -91,13 +91,20 @@ resource "aws_iam_role_policy" "nonprod_codebuild_policy" {
           "s3:GetObject",
           "s3:GetObjectVersion",
           "s3:PutObject",
-          "s3:GetBucketVersioning"
+          "s3:GetBucketVersioning",
+          "s3:PutBucketVersioning",
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
         ],
         Resource = [
           aws_s3_bucket.cicd_artifacts.arn,
           "${aws_s3_bucket.cicd_artifacts.arn}/*",
           "arn:aws:s3:::dofs-global-terraform-state-${random_string.suffix.result}",
-          "arn:aws:s3:::dofs-global-terraform-state-${random_string.suffix.result}/*"
+          "arn:aws:s3:::dofs-global-terraform-state-${random_string.suffix.result}/*",
+          "arn:aws:s3:::dofs-*-lambda-deployments",
+          "arn:aws:s3:::dofs-*-lambda-deployments/*"
         ]
       },
       {
