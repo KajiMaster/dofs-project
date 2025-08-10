@@ -38,9 +38,8 @@ phases:
       - echo "=== Build Phase ==="
       - echo "Initializing Terraform..."
       - terraform init -input=false
-      - echo "Selecting/creating workspace $TF_WORKSPACE"
+      - echo "Ensuring workspace $TF_WORKSPACE exists (auto-selected via TF_WORKSPACE env var)"
       - terraform workspace new $TF_WORKSPACE 2>/dev/null || true
-      - terraform workspace select $TF_WORKSPACE
       - echo "Current workspace $(terraform workspace show)"
       - echo "Validating Terraform configuration..."
       - terraform validate
