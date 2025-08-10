@@ -157,11 +157,7 @@ resource "aws_sfn_state_machine" "order_processing" {
         Resource = "arn:aws:states:::sqs:sendMessage"
         Parameters = {
           QueueUrl    = var.order_queue_url
-          MessageBody = {
-            order       = "$.order"
-            timestamp   = "$.timestamp"
-            source      = "step-functions"
-          }
+          MessageBody.$= "$"
         }
         Next = "QueueSent"
         Retry = [
