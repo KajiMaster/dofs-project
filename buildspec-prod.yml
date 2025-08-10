@@ -20,6 +20,11 @@ phases:
       python: 3.11
     commands:
       - echo "Installing dependencies for PRODUCTION deployment..."
+      - echo "Installing Terraform..."
+      - curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+      - sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+      - sudo apt-get update && sudo apt-get install terraform
+      - terraform version
       - echo 'plugin_cache_dir = "/tmp/.terraform.d/plugin-cache"' > /tmp/.terraformrc
       - mkdir -p /tmp/.terraform.d/plugin-cache
 

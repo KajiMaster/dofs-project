@@ -16,6 +16,7 @@ phases:
       - terraform version
       - echo "Installing dependencies..."
       - mkdir -p /tmp/.terraform.d/plugin-cache
+      - echo 'plugin_cache_dir = "/tmp/.terraform.d/plugin-cache"' > /tmp/.terraformrc
       
   pre_build:
     commands:
