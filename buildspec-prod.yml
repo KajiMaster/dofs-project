@@ -9,7 +9,7 @@ phases:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "Installing Terraform..."
+      - echo "Installing Terraform for production deployment"
       - curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
       - sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
       - sudo apt-get update && sudo apt-get install terraform
@@ -17,47 +17,46 @@ phases:
 
   pre_build:
     commands:
-      - echo "=== PRODUCTION PRE-BUILD ==="
+      - echo "Production pre-build phase"
       - echo "Build started on $(date)"
-      - echo "Target Environment -> $TF_WORKSPACE"
-      - echo "Variables File -> $TF_VAR_FILE"
-      - echo "Terraform Root -> $TF_ROOT"
+      - echo "Target workspace is $TF_WORKSPACE"
+      - echo "Variables file is $TF_VAR_FILE"
       - cd $TF_ROOT
-      - echo "Current directory $(pwd)"
+      - pwd
+      - ls -la
 
   build:
     commands:
-      - echo "=== PRODUCTION BUILD ==="
-      - echo "Checking files in $(pwd)..."
-      - ls -la
-      - echo "Backend configuration:"
+      - echo "Production build phase"
+      - echo "Showing backend configuration"
       - cat backend.tf
-      - echo "Prod tfvars file:"
+      - echo "Showing prod tfvars"
       - cat prod.tfvars
-      - echo "Initializing Terraform with backend..."
+      - echo "Initializing Terraform"
       - terraform init -input=false
-      - echo "Listing existing workspaces..."
-      - terraform workspace list || echo "No workspaces yet"
-      - echo "Creating prod workspace if needed..."
+      - echo "Listing workspaces"
+      - terraform workspace list
+      - echo "Creating or selecting prod workspace"
       - terraform workspace new prod || terraform workspace select prod
-      - echo "Current workspace: $(terraform workspace show)"
-      - echo "Validating Terraform configuration..."
+      - echo "Current workspace is $(terraform workspace show)"
+      - echo "Validating configuration"
       - terraform validate
-      - echo "Planning production deployment..."
-      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan -detailed-exitcode || echo "Plan completed with changes"
-      - echo "Applying production deployment..."
+      - echo "Planning deployment"
+      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan
+      - echo "Applying deployment"
       - terraform apply -input=false -auto-approve tfplan
-      - echo "Getting production outputs..."
-      - terraform output -json > terraform-outputs.json || echo "No outputs available"
+      - echo "Getting outputs"
+      - terraform output -json > terraform-outputs.json
 
   post_build:
     commands:
-      - echo "=== POST-BUILD ==="
+      - echo "Production post-build phase"
       - echo "Build completed on $(date)"
-      - if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then echo "SUCCESS Production deployment completed"; else echo "FAILED Production deployment failed" && exit 1; fi
+      - echo "Deployment status check"
+      - if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then echo "Production deployment SUCCESS"; else echo "Production deployment FAILED"; fi
 
 artifacts:
   files:
     - "**/*"
   base-directory: $TF_ROOT
-  name: "terraform-prod-$(date +%Y%m%d-%H%M%S)"
+  name: "terraform-prod-build"
