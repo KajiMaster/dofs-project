@@ -127,6 +127,9 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
    
    # View execution history
    aws codepipeline list-pipeline-executions --region us-east-1 --pipeline-name dofs-nonprod-pipeline --max-items 5
+   
+   # Trigger pipeline manually (after code changes)
+   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-nonprod-pipeline
    ```
 
 ## Usage
