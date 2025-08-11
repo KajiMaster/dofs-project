@@ -97,17 +97,36 @@ API Gateway → Lambda (API Handler) → Step Functions Orchestrator
 
 ### Step 3: Pipeline Setup
 
-1. **Push code to trigger pipeline**:
+**Manual Pipeline Triggers** (CodeStar webhooks require manual triggering):
+
+1. **Deploy to dev/staging**:
    ```bash
+   # After pushing code to develop branch
    git checkout develop
-   git push origin develop  # Triggers non-prod pipeline
+   git push origin develop
+   
+   # Manually trigger the pipeline
+   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-nonprod-pipeline
    ```
 
-2. **For production deployment**:
+2. **Deploy to production**:
    ```bash
+   # After pushing/merging to main branch  
    git checkout main
    git merge develop
-   git push origin main     # Triggers prod pipeline (requires manual approval)
+   git push origin main
+   
+   # Manually trigger the pipeline
+   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-prod-pipeline
+   ```
+
+3. **Monitor pipeline status**:
+   ```bash
+   # Check current pipeline state
+   aws codepipeline get-pipeline-state --region us-east-1 --name dofs-nonprod-pipeline
+   
+   # View execution history
+   aws codepipeline list-pipeline-executions --region us-east-1 --pipeline-name dofs-nonprod-pipeline --max-items 5
    ```
 
 ## Usage
@@ -276,8 +295,8 @@ dofs-project/
 ## GitFlow Workflow
 
 ### Branch Strategy
-- **`develop`**: Development branch → triggers dev + staging deployment
-- **`main`**: Production branch → triggers production deployment (with approval)
+- **`develop`**: Development branch → manual trigger for dev + staging deployment  
+- **`main`**: Production branch → manual trigger for production deployment (with approval)
 - **`feature/*`**: Feature branches → create PRs to develop
 
 ### Typical Development Flow
@@ -291,12 +310,14 @@ git push origin feature/new-feature
 # Deploy to dev/staging
 git checkout develop
 git merge feature/new-feature
-git push origin develop  # Auto-deploys to dev → staging
+git push origin develop
+# Manually trigger: aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-nonprod-pipeline
 
-# Deploy to production
+# Deploy to production  
 git checkout main
 git merge develop
-git push origin main     # Triggers prod pipeline (manual approval required)
+git push origin main
+# Manually trigger: aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-prod-pipeline
 ```
 
 ## Configuration
