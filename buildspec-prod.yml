@@ -20,8 +20,7 @@ phases:
       - echo "Production build phase"
       - echo "Initializing Terraform with lock handling"
       - terraform init -input=false || (echo "Init failed, attempting to clear locks" && sleep 5 && terraform init -input=false)
-      - echo "Managing workspace"
-      - terraform workspace new prod || terraform workspace select prod
+      - echo "Managing workspace - TF_WORKSPACE is set to $TF_WORKSPACE"
       - echo "Current workspace $(terraform workspace show)"
       - echo "Validating configuration"
       - terraform validate
