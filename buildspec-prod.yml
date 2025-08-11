@@ -17,8 +17,16 @@ phases:
 
   build:
     commands:
-      - echo "Build phase - just testing YAML parsing"
-      - terraform init
+      - echo "Production build phase"
+      - echo "Initializing Terraform with lock handling"
+      - terraform init -input=false || (echo "Init failed, attempting to clear locks" && sleep 5 && terraform init -input=false)
+      - echo "Managing workspace"
       - terraform workspace new prod || terraform workspace select prod
+      - echo "Current workspace $(terraform workspace show)"
+      - echo "Validating configuration"
       - terraform validate
-      - echo "Build completed successfully"
+      - echo "Planning deployment"
+      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan
+      - echo "Applying deployment"
+      - terraform apply -input=false -auto-approve tfplan
+      - echo "Production deployment completed"
