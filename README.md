@@ -50,105 +50,20 @@ API Gateway → API Handler Lambda → Step Functions Orchestrator
 
 ## Installation
 
-### Prerequisites
+📋 **See [INSTALL.md](INSTALL.md) for complete setup instructions**
 
-- AWS CLI configured with appropriate permissions
-- Terraform >= 1.0
-- GitHub account with repository access
-- GitHub Personal Access Token with repo permissions
+Quick start:
+```bash
+git clone https://github.com/YOUR_USERNAME/dofs-project.git
+cd dofs-project
 
-### Step 1: Repository Setup
+# Set up AWS profile and deploy global infrastructure
+export AWS_PROFILE=dofs-project
+cd terraform/environments/global && terraform apply
 
-1. **Fork or clone this repository**:
-   ```bash
-   git clone https://github.com/KajiMaster/dofs-project.git
-   cd dofs-project
-   ```
-
-2. **Update repository configuration**:
-   Edit `terraform/environments/global/terraform.tfvars`:
-   ```hcl
-   github_repo = "your-username/your-repo-name"
-   ```
-
-### Step 2: AWS Configuration
-
-1. **Create dedicated AWS profile for this project** (recommended to avoid conflicts):
-   ```bash
-   # Create dofs-project profile with us-east-1 region
-   aws configure set region us-east-1 --profile dofs-project
-   
-   # Copy credentials from your default profile (or set them directly)
-   aws configure set aws_access_key_id YOUR_ACCESS_KEY --profile dofs-project
-   aws configure set aws_secret_access_key YOUR_SECRET_KEY --profile dofs-project
-   
-   # Set environment variable to use this profile
-   export AWS_PROFILE=dofs-project
-   ```
-
-2. **Configure GitHub Personal Access Token**:
-   ```bash
-   aws ssm put-parameter \
-     --region us-east-1 \
-     --name "/github/personal-access-token" \
-     --value "ghp_your_github_token_here" \
-     --type "SecureString" \
-     --description "GitHub PAT for CI/CD pipelines"
-   ```
-
-3. **Deploy global infrastructure** (bootstrap + CI/CD):
-   ```bash
-   cd terraform/environments/global
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-4. **Deploy application infrastructure**:
-   ```bash
-   cd ../multi-env
-   terraform init
-   terraform workspace new dev
-   terraform plan -var-file="dev.tfvars"
-   terraform apply -var-file="dev.tfvars"
-   ```
-
-### Step 3: Pipeline Setup
-
-**Manual Pipeline Triggers** (CodeStar webhooks require manual triggering):
-
-1. **Deploy to dev/staging**:
-   ```bash
-   # After pushing code to develop branch
-   git checkout develop
-   git push origin develop
-   
-   # Manually trigger the pipeline
-   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-nonprod-pipeline
-   ```
-
-2. **Deploy to production**:
-   ```bash
-   # After pushing/merging to main branch  
-   git checkout main
-   git merge develop
-   git push origin main
-   
-   # Manually trigger the pipeline
-   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-prod-pipeline
-   ```
-
-3. **Monitor pipeline status**:
-   ```bash
-   # Check current pipeline state
-   aws codepipeline get-pipeline-state --region us-east-1 --name dofs-nonprod-pipeline
-   
-   # View execution history
-   aws codepipeline list-pipeline-executions --region us-east-1 --pipeline-name dofs-nonprod-pipeline --max-items 5
-   
-   # Trigger pipeline manually (after code changes)
-   aws codepipeline start-pipeline-execution --region us-east-1 --name dofs-nonprod-pipeline
-   ```
+# Deploy dev environment  
+cd ../multi-env && terraform apply -var-file="dev.tfvars"
+```
 
 ## Usage
 
@@ -161,12 +76,18 @@ cd terraform/environments/multi-env
 terraform output api_gateway_url
 ```
 
-### Testing the API
+### Testing the System
 
-**Quick Test** - Use the included test script:
+**Environment-Specific Tests**:
 ```bash
-export AWS_PROFILE=dofs-project  # Use your dofs-project profile
-./test-api.sh
+# Development stress test (60 orders)
+./stress-test.sh
+
+# Staging test (25 orders) 
+./staging-test.sh
+
+# Production test (30 orders)
+./prod-test.sh
 ```
 
 **Manual Testing** - Replace `YOUR_API_URL` with your actual API Gateway URL:
