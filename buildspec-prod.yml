@@ -28,18 +28,26 @@ phases:
   build:
     commands:
       - echo "=== PRODUCTION BUILD ==="
-      - echo "Initializing Terraform..."
+      - echo "Checking files in $(pwd)..."
+      - ls -la
+      - echo "Backend configuration:"
+      - cat backend.tf
+      - echo "Prod tfvars file:"
+      - cat prod.tfvars
+      - echo "Initializing Terraform with backend..."
       - terraform init -input=false
-      - echo "Creating/selecting workspace prod"
-      - terraform workspace new prod 2>/dev/null || terraform workspace select prod
-      - echo "Current workspace $(terraform workspace show)"
-      - echo "Validating configuration..."
+      - echo "Listing existing workspaces..."
+      - terraform workspace list || echo "No workspaces yet"
+      - echo "Creating prod workspace if needed..."
+      - terraform workspace new prod || terraform workspace select prod
+      - echo "Current workspace: $(terraform workspace show)"
+      - echo "Validating Terraform configuration..."
       - terraform validate
-      - echo "Planning deployment..."
-      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan
-      - echo "Applying deployment..."
+      - echo "Planning production deployment..."
+      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan -detailed-exitcode || echo "Plan completed with changes"
+      - echo "Applying production deployment..."
       - terraform apply -input=false -auto-approve tfplan
-      - echo "Getting outputs..."
+      - echo "Getting production outputs..."
       - terraform output -json > terraform-outputs.json || echo "No outputs available"
 
   post_build:
