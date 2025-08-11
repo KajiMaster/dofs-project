@@ -1,62 +1,24 @@
 version: 0.2
 
-env:
-  variables:
-    TF_ROOT: "terraform/environments/multi-env"
-
 phases:
   install:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "Installing Terraform for production deployment"
+      - echo "Installing Terraform"
       - curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
       - sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
       - sudo apt-get update && sudo apt-get install terraform
-      - terraform version
 
   pre_build:
     commands:
-      - echo "Production pre-build phase"
-      - echo "Build started on $(date)"
-      - echo "Target workspace is $TF_WORKSPACE"
-      - echo "Variables file is $TF_VAR_FILE"
-      - cd $TF_ROOT
-      - pwd
-      - ls -la
+      - echo "Pre-build phase"
+      - cd terraform/environments/multi-env
 
   build:
     commands:
-      - echo "Production build phase"
-      - echo "Showing backend configuration"
-      - cat backend.tf
-      - echo "Showing prod tfvars"
-      - cat prod.tfvars
-      - echo "Initializing Terraform"
-      - terraform init -input=false
-      - echo "Listing workspaces"
-      - terraform workspace list
-      - echo "Creating or selecting prod workspace"
+      - echo "Build phase - just testing YAML parsing"
+      - terraform init
       - terraform workspace new prod || terraform workspace select prod
-      - echo "Current workspace is $(terraform workspace show)"
-      - echo "Validating configuration"
       - terraform validate
-      - echo "Planning deployment"
-      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan
-      - echo "Applying deployment"
-      - terraform apply -input=false -auto-approve tfplan
-      - echo "Getting outputs"
-      - terraform output -json > terraform-outputs.json
-
-  post_build:
-    commands:
-      - echo "Production post-build phase"
-      - echo "Build completed on $(date)"
-      - echo "Deployment status check"
-      - if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then echo "Production deployment SUCCESS"; else echo "Production deployment FAILED"; fi
-
-artifacts:
-  files:
-    - "**/*"
-  base-directory: $TF_ROOT
-  name: "terraform-prod-build"
+      - echo "Build completed successfully"
