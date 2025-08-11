@@ -3,10 +3,10 @@
 
 output "terraform_state_bucket" {
   description = "Name of the S3 bucket for Terraform state (externally managed)"
-  value       = "dofs-global-terraform-state-5ju06wiy"
+  value       = var.terraform_state_bucket
 }
 
 output "terraform_locks_table" {
   description = "Name of the DynamoDB table for Terraform locks (externally managed)"  
-  value       = "dofs-global-terraform-locks"
+  value       = var.terraform_locks_table
 }

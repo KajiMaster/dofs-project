@@ -2,8 +2,6 @@
 project_name = "dofs"
 environment  = "dev"
 aws_region   = "us-east-1"
-
-# Global state bucket (hardcoded since backend can't interpolate)
 terraform_state_bucket = "dofs-global-terraform-state-5ju06wiy"
 
 # Lambda configuration

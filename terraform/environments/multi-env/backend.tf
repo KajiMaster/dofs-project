@@ -6,6 +6,7 @@ terraform {
     bucket         = "dofs-global-terraform-state-5ju06wiy"
     key            = "terraform.tfstate"
     region         = "us-east-1" 
+    use_lockfile   = true
     dynamodb_table = "dofs-global-terraform-locks"
     encrypt        = true
   }
