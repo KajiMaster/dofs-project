@@ -1,116 +1,55 @@
-# Modular BuildSpec for Production Environment
-# Enhanced version with additional safety checks and notifications
-# Environment variables from CodeBuild project:
-#   - TF_WORKSPACE: Should be 'prod'
-#   - TF_VAR_FILE: Should be 'prod.tfvars'  
-#   - TF_IN_AUTOMATION: Set to 'true' for CI/CD mode
-
 version: 0.2
 
 env:
   variables:
-    # Default Terraform directory - override in CodeBuild if different
     TF_ROOT: "terraform/environments/multi-env"
-    # Enable colored output and automation mode
-    TF_CLI_CONFIG_FILE: "/tmp/.terraformrc"
 
 phases:
   install:
     runtime-versions:
       python: 3.11
     commands:
-      - echo "Installing dependencies for PRODUCTION deployment..."
       - echo "Installing Terraform..."
       - curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
       - sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
       - sudo apt-get update && sudo apt-get install terraform
       - terraform version
-      - echo 'plugin_cache_dir = "/tmp/.terraform.d/plugin-cache"' > /tmp/.terraformrc
-      - mkdir -p /tmp/.terraform.d/plugin-cache
 
   pre_build:
     commands:
-      - echo "=== 🚨 PRODUCTION PRE-BUILD PHASE 🚨 ==="
+      - echo "=== PRODUCTION PRE-BUILD ==="
       - echo "Build started on $(date)"
-      - echo "🎯 Target Environment -> $TF_WORKSPACE"
-      - echo "📋 Variables File -> $TF_VAR_FILE"
-      - echo "📁 Terraform Root -> $TF_ROOT"
-      - echo "Validating PRODUCTION deployment prerequisites..."
-      - |
-        if [ "$TF_WORKSPACE" != "prod" ]; then
-          echo "❌ ERROR: Expected TF_WORKSPACE=prod, got $TF_WORKSPACE"
-          exit 1
-        fi
-      - |
-        if [ "$TF_VAR_FILE" != "prod.tfvars" ]; then
-          echo "❌ ERROR: Expected TF_VAR_FILE=prod.tfvars, got $TF_VAR_FILE"
-          exit 1
-        fi
-      - echo "✅ Production deployment validation passed"
-      - echo "Changing to Terraform directory..."
+      - echo "Target Environment -> $TF_WORKSPACE"
+      - echo "Variables File -> $TF_VAR_FILE"
+      - echo "Terraform Root -> $TF_ROOT"
       - cd $TF_ROOT
-      - echo "Current directory: $(pwd)"
+      - echo "Current directory $(pwd)"
 
   build:
     commands:
-      - echo "=== 🎯 PRODUCTION BUILD PHASE 🎯 ==="
-      - echo "Initializing Terraform for PRODUCTION..."
+      - echo "=== PRODUCTION BUILD ==="
+      - echo "Initializing Terraform..."
       - terraform init -input=false
-      - echo "Selecting/creating PRODUCTION workspace..."
-      - terraform workspace select $TF_WORKSPACE 2>/dev/null || terraform workspace new $TF_WORKSPACE
-      - |
-        current_workspace=$(terraform workspace show)
-        if [ "$current_workspace" != "prod" ]; then
-          echo "❌ ERROR: Not in production workspace. Current: $current_workspace"
-          exit 1
-        fi
-      - echo "✅ Confirmed in PRODUCTION workspace: $current_workspace"
-      - echo "Validating Terraform configuration..."
+      - echo "Creating/selecting workspace prod"
+      - terraform workspace new prod 2>/dev/null || terraform workspace select prod
+      - echo "Current workspace $(terraform workspace show)"
+      - echo "Validating configuration..."
       - terraform validate
-      - echo "Running terraform plan for PRODUCTION..."
-      - terraform plan -var-file="$TF_VAR_FILE" -input=false -out=tfplan -detailed-exitcode
-      - |
-        plan_exit_code=$?
-        if [ $plan_exit_code -eq 1 ]; then
-          echo "❌ ERROR: Terraform plan failed"
-          exit 1
-        elif [ $plan_exit_code -eq 2 ]; then
-          echo "📋 Changes detected in plan - proceeding with apply"
-        else
-          echo "✅ No changes detected in plan"
-        fi
-      - echo "🚀 Applying terraform plan to PRODUCTION..."
-      - echo "⏰ Starting production deployment at $(date)"
+      - echo "Planning deployment..."
+      - terraform plan -var-file="prod.tfvars" -input=false -out=tfplan
+      - echo "Applying deployment..."
       - terraform apply -input=false -auto-approve tfplan
-      - echo "📊 Getting production outputs..."
+      - echo "Getting outputs..."
       - terraform output -json > terraform-outputs.json || echo "No outputs available"
 
   post_build:
     commands:
-      - echo "=== 🎉 PRODUCTION POST-BUILD PHASE 🎉 ==="
+      - echo "=== POST-BUILD ==="
       - echo "Build completed on $(date)"
-      - |
-        if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then
-          echo "🎉 SUCCESS: PRODUCTION deployment completed successfully!"
-          echo "🌟 Environment $TF_WORKSPACE is now updated"
-          echo "🔍 Production resources:"
-          terraform show -no-color | head -30 || echo "Unable to show state"
-        else
-          echo "💥 FAILED: PRODUCTION deployment failed!"
-          echo "🚨 Please investigate immediately"
-          exit 1
-        fi
-      - echo "📈 Deployment metrics:"
-      - echo "  - Workspace: $(terraform workspace show)"
-      - echo "  - Completed: $(date)"
-      - echo "  - Build ID: $CODEBUILD_BUILD_ID"
+      - if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then echo "SUCCESS Production deployment completed"; else echo "FAILED Production deployment failed" && exit 1; fi
 
 artifacts:
   files:
     - "**/*"
   base-directory: $TF_ROOT
-  name: "terraform-production-$(date +%Y%m%d-%H%M%S)"
-
-cache:
-  paths:
-    - '/tmp/.terraform.d/plugin-cache/**/*'
+  name: "terraform-prod-$(date +%Y%m%d-%H%M%S)"
