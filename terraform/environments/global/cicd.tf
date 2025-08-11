@@ -260,6 +260,8 @@ resource "aws_codepipeline" "nonprod" {
   name          = "${var.project_name}-nonprod-pipeline"
   role_arn      = aws_iam_role.nonprod_codepipeline_role.arn
   pipeline_type = "V2"
+  
+  depends_on = [aws_codestarconnections_connection.github]
 
   artifact_store {
     location = aws_s3_bucket.cicd_artifacts.bucket
