@@ -5,12 +5,30 @@ A production-ready, event-driven serverless architecture built on AWS using Terr
 ## Architecture Overview
 
 ```
-API Gateway → Lambda (API Handler) → Step Functions Orchestrator
-                ↓                           ↓
-            Validation              Order Storage (DynamoDB)
-                ↓                           ↓
-            SQS Queue ←→ Fulfillment Lambda → DLQ + Failed Orders
+API Gateway → API Handler Lambda → Step Functions Orchestrator
+                                        ↓
+                                   Validate Order
+                                        ↓
+                                   Store Order (DynamoDB)
+                                        ↓
+                                     SQS Queue
+                                        ↓
+                               Fulfillment Lambda (70% success)
+                                   ↓        ↓
+                              FULFILLED   FAILED → DLQ → Failed Orders Table
 ```
+
+**Sequential Processing Flow**:
+1. API Gateway receives POST /order request
+2. API Handler Lambda validates input and triggers Step Functions
+3. Step Functions orchestrates **sequential** workflow:
+   - ValidateOrder Lambda → CheckValidation (choice)
+   - StoreOrder Lambda → CheckStorage (choice) → Updates `orders` table
+   - SendToQueue (direct SQS integration)
+4. SQS triggers Fulfillment Lambda with 70% success rate
+5. **Success**: Updates `orders` table status = FULFILLED
+6. **Failure**: Updates `orders` table status = FAILED + writes to `failed_orders` table
+7. After 3 retries: Messages → DLQ → DLQ Handler → `failed_orders` table
 
 ### Core Components
 
